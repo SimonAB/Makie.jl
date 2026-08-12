@@ -987,6 +987,27 @@ end
     f
 end
 
+@reference_test "tricontour" begin
+    x = RNG.randn(50)
+    y = RNG.randn(50)
+    z = -sqrt.(x .^ 2 .+ y .^ 2) .+ 0.1 .* RNG.randn.()
+
+    x2 = RNG.rand(30)
+    y2 = RNG.rand(30)
+    z2 = sin.(2π .* x2) .* cos.(2π .* y2)
+
+    f = Figure(size = (900, 300))
+    ax1, tr1 = tricontour(f[1, 1], x, y, z; levels = 8)
+    scatter!(ax1, x, y; color = z, strokewidth = 1, strokecolor = :black)
+    Colorbar(f[1, 2], tr1)
+
+    ax2, tr2 = tricontour(f[1, 3], x, y, z; levels = 8, color = :black, linewidth = 2)
+
+    ax3, tr3 = tricontour(f[1, 4], x2, y2, z2; levels = 6, colormap = :RdBu)
+    Colorbar(f[1, 5], tr3)
+    f
+end
+
 @reference_test "contour labels 2D" begin
     paraboloid = (x, y) -> 10(x^2 + y^2)
 
@@ -1214,10 +1235,10 @@ end
     f, ax, l = lines(0 .. 9, sin; axis = (; xgridvisible = false, ygridvisible = false))
     ylims!(ax, -1.5, 1.5)
 
-    bracket!(pi / 2, 1, 5pi / 2, 1, offset = 5, text = "Period length", style = :square)
+    bracket!(pi / 2, 1, 5pi / 2, 1, offset = 5, text = L"\text{Period length}\,\mathcal{T} = 2\pi", style = :square)
 
     bracket!(
-        pi / 2, 1, pi / 2, -1, text = "Amplitude", orientation = :down,
+        pi / 2, 1, pi / 2, -1, text = rich(rich("Amp", color = :red, font = :bold), rich("litude", color = :darkred)), orientation = :down,
         linestyle = :dash, rotation = 0, align = (:right, :center), textoffset = 4, linewidth = 2, color = :red, textcolor = :red
     )
 
@@ -2461,6 +2482,20 @@ end
         ax, 7, -0.5, 3pi / 2, -1.0,
         text = "Corner", path = Ann.Paths.Corner(), labelspace = :data,
         linewidth = 3, shrink = (0, 30)
+    )
+    annotation!(
+        ax, 0, -100, 10, sin(10),
+        style = Ann.Styles.LineArrow(),
+    )
+    ylims!(ax, -1.5, 1.8)
+    annotation!(
+        ax, pi / 2, 1.0, 5pi / 2, 1.0,
+        text = "", style = Ann.Styles.WithText(
+            Ann.Styles.LineArrow();
+            text = "one period", fontsize = 12
+        ),
+        path = Ann.Paths.Arc(0.3), labelspace = :data,
+        color = :purple, shrink = (5.0, 5.0),
     )
 
     f
