@@ -72,26 +72,29 @@ jobs:
 
           if isempty(stale_pr_numbers)
               @info "No stale previews to remove"
-              exit(1)
-          end
-
-          # Remove stale previews from both directories
-          for pr in stale_pr_numbers
-              # Remove doc preview if it exists
-              if pr in pr_previews_docs
-                  path = joinpath("previews", "PR$pr")
-                  @info "Removing doc preview: $path"
-                  run(`git rm -rf $path`)
-              end
-              # Remove reference images preview if it exists
-              if pr in pr_previews_refimgs
-                  path = joinpath("reference_images", "PR$pr")
-                  @info "Removing reference images preview: $path"
-                  run(`git rm -rf $path`)
+          else
+              # Remove stale previews from both directories
+              for pr in stale_pr_numbers
+                  # Remove doc preview if it exists
+                  if pr in pr_previews_docs
+                      path = joinpath("previews", "PR$pr")
+                      @info "Removing doc preview: $path"
+                      run(`git rm -rf $path`)
+                  end
+                  # Remove reference images preview if it exists
+                  if pr in pr_previews_refimgs
+                      path = joinpath("reference_images", "PR$pr")
+                      @info "Removing reference images preview: $path"
+                      run(`git rm -rf $path`)
+                  end
               end
           end
       - name: Push changes
         run: |
+          if git diff --cached --quiet; then
+            echo "No staged preview removals; skipping push"
+            exit 0
+          fi
           git config user.name "Documenter.jl"
           git config user.email "documenter@juliadocs.github.io"
           git commit -m "delete preview"
