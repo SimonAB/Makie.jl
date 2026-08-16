@@ -8,6 +8,9 @@ on:
 jobs:
   doc-preview-cleanup:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
     steps:
       - name: Checkout gh-pages branch
         uses: actions/checkout@v7
@@ -17,6 +20,8 @@ jobs:
         with:
           version: '1'
       - name: Check for stale PR previews and reference images
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: julia {0}
         run: |
           using Pkg
@@ -29,6 +34,14 @@ jobs:
 
           repo = ENV["GITHUB_REPOSITORY"]
           retention_days = 14
+          token = get(ENV, "GITHUB_TOKEN", "")
+          api_headers = [
+              "Accept" => "application/vnd.github+json",
+              "User-Agent" => "Makie-stale-preview-cleanup",
+          ]
+          if !isempty(token)
+              push!(api_headers, "Authorization" => "Bearer $token")
+          end
 
           # Collect PR previews from both docs and reference_images directories
           pr_previews_docs = if isdir("previews")
@@ -50,43 +63,52 @@ jobs:
           all_pr_numbers = unique(vcat(pr_previews_docs, pr_previews_refimgs))
           @info "Found $(length(pr_previews_docs)) doc previews and $(length(pr_previews_refimgs)) reference image previews"
 
-          function all_prs()
-              query_prs(page) = JSON3.read(HTTP.get("https://api.github.com/repos/$repo/pulls?per_page=100;page=$(page)").body)
-              prs = []
-              page = 1
-              while true
-                  page_prs = query_prs(page)
-                  isempty(page_prs) && break
-                  append!(prs, page_prs)
-                  page += 1
-              end
-              return prs
-          end
-          prs = all_prs()
-          open_within_threshold = map(x -> x.number, filter(prs) do pr
-              time = DateTime(pr.updated_at[1:19], ISODateTimeFormat)
-              return pr.state == "open" && Dates.days(now() - time) <= retention_days
-          end)
-
-          stale_pr_numbers = setdiff(all_pr_numbers, open_within_threshold)
-          @info "Found $(length(stale_pr_numbers)) stale PR previews to remove"
-
-          if isempty(stale_pr_numbers)
-              @info "No stale previews to remove"
+          if isempty(all_pr_numbers)
+              @info "No PR previews present; nothing to clean"
           else
-              # Remove stale previews from both directories
-              for pr in stale_pr_numbers
-                  # Remove doc preview if it exists
-                  if pr in pr_previews_docs
-                      path = joinpath("previews", "PR$pr")
-                      @info "Removing doc preview: $path"
-                      run(`git rm -rf $path`)
+              function all_prs()
+                  query_prs(page) = JSON3.read(
+                      HTTP.get(
+                          "https://api.github.com/repos/$repo/pulls?per_page=100&page=$(page)&state=all",
+                          api_headers,
+                      ).body,
+                  )
+                  prs = []
+                  page = 1
+                  while true
+                      page_prs = query_prs(page)
+                      isempty(page_prs) && break
+                      append!(prs, page_prs)
+                      page += 1
                   end
-                  # Remove reference images preview if it exists
-                  if pr in pr_previews_refimgs
-                      path = joinpath("reference_images", "PR$pr")
-                      @info "Removing reference images preview: $path"
-                      run(`git rm -rf $path`)
+                  return prs
+              end
+              prs = all_prs()
+              open_within_threshold = map(x -> x.number, filter(prs) do pr
+                  time = DateTime(pr.updated_at[1:19], ISODateTimeFormat)
+                  return pr.state == "open" && Dates.days(now() - time) <= retention_days
+              end)
+
+              stale_pr_numbers = setdiff(all_pr_numbers, open_within_threshold)
+              @info "Found $(length(stale_pr_numbers)) stale PR previews to remove"
+
+              if isempty(stale_pr_numbers)
+                  @info "No stale previews to remove"
+              else
+                  # Remove stale previews from both directories
+                  for pr in stale_pr_numbers
+                      # Remove doc preview if it exists
+                      if pr in pr_previews_docs
+                          path = joinpath("previews", "PR$pr")
+                          @info "Removing doc preview: $path"
+                          run(`git rm -rf $path`)
+                      end
+                      # Remove reference images preview if it exists
+                      if pr in pr_previews_refimgs
+                          path = joinpath("reference_images", "PR$pr")
+                          @info "Removing reference images preview: $path"
+                          run(`git rm -rf $path`)
+                      end
                   end
               end
           end
